@@ -1,6 +1,7 @@
 #include "Emulator.h"
 #include <iostream>
 #include <bitset>
+#include "types.h"
 
 void Emulator::init() {
     cout << "b = " << std::bitset<32>(m_b) << endl;    
@@ -43,26 +44,26 @@ bool Emulator::cycle() {
 Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
     ULAOutput result;
     
-    uint8_t ca = (input.a & input.ena) ^ input.inva;
-    uint8_t cb = (input.b & input.enb);
+    u8 ca = (input.a & input.ena) ^ input.inva;
+    u8 cb = (input.b & input.enb);
 
     // Logic Unit
-    uint8_t AB = ca & cb;
-    uint8_t ApB = ca | cb;
-    uint8_t nB = ~input.b;
+    u8 AB = ca & cb;
+    u8 ApB = ca | cb;
+    u8 nB = ~input.b;
 
     // decoder
-    uint8_t d0 = (~input.f0) & (~input.f1);
-    uint8_t d1 = (~input.f0) & (input.f1);
-    uint8_t d2 = (~input.f0) & (input.f1);
-    uint8_t d3 = (input.f0) & (input.f1);
+    u8 d0 = (~input.f0) & (~input.f1);
+    u8 d1 = (~input.f0) & (input.f1);
+    u8 d2 = (~input.f0) & (input.f1);
+    u8 d3 = (input.f0) & (input.f1);
     
     // complete Adder
-    uint8_t xor0 = ca ^ cb;
-    uint8_t adder_result = input.in_carry ^ xor0;
+    u8 xor0 = ca ^ cb;
+    u8 adder_result = input.in_carry ^ xor0;
 
-    uint8_t carry_and0 = ca & cb & d3;
-    uint8_t carry_and1 = xor0 & input.in_carry & d3;
+    u8 carry_and0 = ca & cb & d3;
+    u8 carry_and1 = xor0 & input.in_carry & d3;
 
     result.out_carry = carry_and0 | carry_and1;
     result.sum = (AB & d0) | (ApB & d1) | (nB & d2) | (adder_result & d3);
@@ -70,16 +71,16 @@ Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
     return result;
 }
 
-pair<uint32_t, uint32_t> Emulator::execute_instruction() {
+pair<u32, u32> Emulator::execute_instruction() {
     ULAInput input = {
         .a = 0,
         .b = 0,
-        .ena = (uint8_t)((m_ir >> 3) & 1), // read ENA bit
-        .enb = (uint8_t)((m_ir >> 2) & 1), // read ENB bit
-        .inva = (uint8_t)((m_ir >> 1) & 1), // read INVA bit
-        .f0 = (uint8_t)((m_ir >> 5) & 1), // read F0 bit
-        .f1 = (uint8_t)((m_ir >> 4) & 1), // read F1 bit
-        .in_carry = (uint8_t)(m_ir & 1), // read INC bit
+        .ena = (u8)((m_ir >> 3) & 1), // read ENA bit
+        .enb = (u8)((m_ir >> 2) & 1), // read ENB bit
+        .inva = (u8)((m_ir >> 1) & 1), // read INVA bit
+        .f0 = (u8)((m_ir >> 5) & 1), // read F0 bit
+        .f1 = (u8)((m_ir >> 4) & 1), // read F1 bit
+        .in_carry = (u8)(m_ir & 1), // read INC bit
     };
 
     m_s = 0;
