@@ -50,12 +50,12 @@ Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
     // Logic Unit
     u8 AB = ca & cb;
     u8 ApB = ca | cb;
-    u8 nB = ~input.b;
+    u8 nB = (~cb) & 1;
 
     // decoder
     u8 d0 = (~input.f0) & (~input.f1);
     u8 d1 = (~input.f0) & (input.f1);
-    u8 d2 = (~input.f0) & (input.f1);
+    u8 d2 = (input.f0) & (~input.f1);
     u8 d3 = (input.f0) & (input.f1);
     
     // complete Adder
@@ -97,9 +97,12 @@ pair<u32, u32> Emulator::execute_instruction() {
         m_co = output.out_carry;
     }
 
-    // returns A with ENA and INVA effects, and B with ENB effects 
-    return {
-        (input.inva ? ~m_a : m_a) * input.ena,
-        m_b * input.enb,
-    };
+    // returns A with ENA and INVA effects, and B with ENB effects
+    u32 a_out = input.ena ? m_a : 0u;
+    if (input.inva)
+        a_out = ~a_out;
+
+    u32 b_out = input.enb ? m_b : 0u;
+
+    return {a_out, b_out};
 }

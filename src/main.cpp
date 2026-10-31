@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
 
         if(s[0] == 'A')
             a_param = value;
-        else if(s[1] == 'B')
+        else if(s[0] == 'B')
             b_param = value;
         else
             cerr << "error: unknown parameter (" << s << ")" << endl;
@@ -55,6 +55,10 @@ int main(int argc, char* argv[]) {
 
         string line;
         while(getline(f, line)) {
+            if(line.size() != 6) {
+                cerr << "invalid line " << line << endl;
+                continue;
+            }
             int ins = stoi(line, nullptr, 2);
             instructions.push_back(ins);
         }
