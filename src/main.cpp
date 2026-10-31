@@ -55,6 +55,9 @@ int main(int argc, char* argv[]) {
 
         string line;
         while(getline(f, line)) {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
             if(line.size() != 6) {
                 cerr << "invalid line " << line << endl;
                 continue;
