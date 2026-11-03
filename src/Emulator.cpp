@@ -10,7 +10,7 @@ void Emulator::init() {
     cout << "Start of program" << endl;
 
     m_cycle = 0;
-    m_pc = 0;
+    m_regs.pc = 0;
     m_ir = 0;
 }
 
@@ -20,24 +20,32 @@ bool Emulator::cycle() {
     cout << "========================================" << endl;
     cout << "Cycle " << m_cycle << endl;
     cout << endl;
-    cout << "PC = " << m_pc + 1 << endl;
+    cout << "PC = " << m_regs.pc + 1 << endl;
 
-    if(m_pc >= m_instructions.size()) {
+    if(m_regs.pc >= m_instructions.size()) {
         cout << "> Line is empty, EOP" << endl;
         return false;
     }
 
-    m_ir = m_instructions[m_pc];
+    m_ir = m_instructions[m_regs.pc++];
+
+    cout << "IR " << std::bitset<8>(m_ir) << endl;
+
+    if((m_ir & (0b11000000)) == 0b11000000) {
+        cout << "> Error, invalid control signals." << endl;
+        return true;
+    }
 
     auto vars = execute_instruction();
     
-    cout << "IR " << std::bitset<6>(m_ir) << endl;
     cout << "b " << std::bitset<32>(vars.second) << endl;
     cout << "a " << std::bitset<32>(vars.first) << endl;
     cout << "s " << std::bitset<32>(m_s) << endl;
-    cout << "co " << m_co << endl;
+    cout << "sd " << std::bitset<32>(m_sd) << endl;
+    cout << "N " << (u32)m_n << endl;
+    cout << "Z " << (u32)m_z << endl;
+    cout << "co " << (u32)m_co << endl;
 
-    m_pc++;
     return true;
 }
 
@@ -81,6 +89,8 @@ pair<u32, u32> Emulator::execute_instruction() {
         .f0 = (u8)((m_ir >> 5) & 1), // read F0 bit
         .f1 = (u8)((m_ir >> 4) & 1), // read F1 bit
         .in_carry = (u8)(m_ir & 1), // read INC bit
+        .sll8 = (u8)((m_ir >> 7) & 1), // read SLL8 bit
+        .sra1 = (u8)((m_ir >> 6) & 1)
     };
 
     m_s = 0;
@@ -91,10 +101,27 @@ pair<u32, u32> Emulator::execute_instruction() {
         input.b = (m_b >> i) & 1;
 
         ULAOutput output = process_ula(input);
-        m_s |= (output.sum << i);
+        m_s |= ((u32)(output.sum) << i);
 
         input.in_carry = output.out_carry;
         m_co = output.out_carry;
+    }
+
+    m_sd = m_s;
+
+    // calculate Negative and Zero sinals
+    m_n = (m_s >> 31) & 1;
+    m_z = (m_s == 0);
+
+    // process sll8 and sra1
+    if(input.sll8 && input.sra1) {
+        cerr << "INVALID CONTROL SIGNALS" << endl;
+    }
+    else if(input.sll8) {
+        m_sd = (m_s << 8);
+    }
+    else if(input.sra1) {
+        m_sd = (m_s >> 1) | (m_s & (1 << 31));
     }
 
     // returns A with ENA and INVA effects, and B with ENB effects

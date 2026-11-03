@@ -25,6 +25,8 @@ private:
 
         u8 f0, f1;
         u8 in_carry;
+
+        u8 sll8, sra1;
     };
     struct ULAOutput {
         u8 sum;
@@ -39,11 +41,28 @@ private:
     u32 m_a;
     u32 m_b;
     u32 m_s;
+    u32 m_sd;
     u32 m_co;
+
+    u32 m_n;
+    u32 m_z;
     
     u32 m_cycle = 0;
-    u32 m_pc = 0;
     u32 m_ir = 0;
+
+    struct Registers {
+        u32 h;
+        u32 opc;
+        u32 tos;
+        u32 cpp;
+        u32 lv;
+        u32 sp;
+        u32 pc;
+        u32 mdr;
+        u32 mar;
+
+        u8 mbr;
+    } m_regs;
 };
 
 #endif
