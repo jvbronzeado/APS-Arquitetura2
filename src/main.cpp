@@ -10,41 +10,9 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-    if(argc < 2) { // program needs the input argument
-        cerr << "usage: ./aps1 <input> [A=value] [B=value]" << endl;
+    if(argc < 3) { // program needs the input argument
+        cerr << "usage: ./aps1 <input> <default_registers>" << endl;
         return -1;
-    }
-
-    u32 a_param = ~0;
-    u32 b_param = 1;
-    
-    const vector<string_view> args(argv, argv + argc); // parse args to string
-    for(int i = 2; i < argc; i++) {
-        string_view s = args[i];
-        if(s.size() <= 2)
-            continue;
-        if(s[1] != '=')
-            continue;
-
-        string_view numstr = s.substr(2);
-
-        u32 value = 0;
-        auto [ptr, ec] = from_chars(numstr.data(), numstr.data() + numstr.size(), value);
-        if(ec == errc::invalid_argument) {
-            cerr << "error: not a valid number (" << s << ")" << endl;
-            continue;
-        }
-        else if(ec == errc::result_out_of_range) {
-            cerr << "error: number too large or small (" << s << ")" << endl;
-            continue;
-        }
-
-        if(s[0] == 'A')
-            a_param = value;
-        else if(s[0] == 'B')
-            b_param = value;
-        else
-            cerr << "error: unknown parameter (" << s << ")" << endl;
     }
 
     string_view path = argv[1];
@@ -58,7 +26,7 @@ int main(int argc, char* argv[]) {
             if (!line.empty() && line.back() == '\r')
                 line.pop_back();
 
-            if(line.size() != 8) {
+            if(line.size() != 21 || line.find_first_not_of("01") != string::npos) {
                 cerr << "invalid line " << line << endl;
                 continue;
             }
@@ -75,7 +43,12 @@ int main(int argc, char* argv[]) {
         cout.rdbuf(output.rdbuf());
 
         // begin emulation        
-        Emulator emu(instructions, a_param, b_param);
+        Emulator emu(instructions);
+        if(!emu.load_registers(argv[2])) {
+            cout.rdbuf(console_buffer);
+            return -1;
+        }
+
         emu.init();
         while(emu.cycle()) {}
 

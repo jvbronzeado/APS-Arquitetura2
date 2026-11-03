@@ -1,52 +1,163 @@
 #include "Emulator.h"
 #include <iostream>
 #include <bitset>
+#include <fstream>
+#include <sstream>
 #include "types.h"
 
+const char* b_names[] = {"mdr", "pc", "mbr", "mbru", "sp", "lv", "cpp", "tos", "opc"};
+const char* c_names[] = {"mar", "mdr", "pc", "sp", "lv", "cpp", "tos", "opc", "h"};
+
 void Emulator::init() {
-    cout << "b = " << std::bitset<32>(m_b) << endl;    
-    cout << "a = " << std::bitset<32>(m_a) << endl;
-    cout << endl;
+    for (u32 instruction : m_instructions)
+        cout << std::bitset<21>(instruction) << endl;
+    cout << "\n=====================================================\n> Initial register states" << endl;
+    print_registers();
+    cout << "\n=====================================================" << endl;
     cout << "Start of program" << endl;
 
     m_cycle = 0;
-    m_regs.pc = 0;
     m_ir = 0;
 }
 
 bool Emulator::cycle() {
     m_cycle++;
     
-    cout << "========================================" << endl;
+    cout << "=====================================================" << endl;
     cout << "Cycle " << m_cycle << endl;
-    cout << endl;
-    cout << "PC = " << m_regs.pc + 1 << endl;
 
-    if(m_regs.pc >= m_instructions.size()) {
-        cout << "> Line is empty, EOP" << endl;
+    if(m_cycle > m_instructions.size()) {
+        cout << "No more lines, EOP." << endl;
         return false;
     }
 
-    m_ir = m_instructions[m_regs.pc++];
+    m_ir = m_instructions[m_cycle-1];
 
-    cout << "IR " << std::bitset<8>(m_ir) << endl;
+    u32 b_selector = m_ir & 0xF;
+    u32 c_mask = (m_ir >> 4) & 0x1FF;
+    cout << "ir = " << std::bitset<8>(m_ir >> 13) << ' '
+         << std::bitset<9>(c_mask) << ' ' << std::bitset<4>(b_selector) << "\n\n";
+    cout << "b_bus = " << (b_selector < 9 ? b_names[b_selector] : "invalid") << endl;
 
-    if((m_ir & (0b11000000)) == 0b11000000) {
-        cout << "> Error, invalid control signals." << endl;
-        return true;
+    cout << "c_bus = ";
+    bool first = true;
+    for (int i = 8; i >= 0; --i) if (c_mask & (1u << i)) {
+        if (!first) cout << ", ";
+        cout << c_names[i];
+        first = false;
+    }
+    if (first) {
+        cout << "none";
     }
 
-    auto vars = execute_instruction();
-    
-    cout << "b " << std::bitset<32>(vars.second) << endl;
-    cout << "a " << std::bitset<32>(vars.first) << endl;
-    cout << "s " << std::bitset<32>(m_s) << endl;
-    cout << "sd " << std::bitset<32>(m_sd) << endl;
-    cout << "N " << (u32)m_n << endl;
-    cout << "Z " << (u32)m_z << endl;
-    cout << "co " << (u32)m_co << endl;
+    cout << "\n\n> Registers before instruction" << endl;
+    print_registers();
 
+    if((m_ir & (3u << 19)) == (3u << 19)) {
+        cout << "> Error, invalid control signals." << endl;
+    }
+    else if(b_selector >= 9) {
+        cout << "> Error, invalid B bus selector." << endl;
+    }
+    else {
+        execute_instruction();
+    }
+
+    cout << "\n> Registers after instruction" << endl;
+    print_registers();
+
+    //m_regs = m_defaultregs;
     return true;
+}
+
+void Emulator::print_registers() const {
+    cout << "mar = " << std::bitset<32>(m_regs.mar) << '\n'
+         << "mdr = " << std::bitset<32>(m_regs.mdr) << '\n'
+         << "pc = " << std::bitset<32>(m_regs.pc) << '\n'
+         << "mbr = " << std::bitset<8>(m_regs.mbr) << '\n'
+         << "sp = " << std::bitset<32>(m_regs.sp) << '\n'
+         << "lv = " << std::bitset<32>(m_regs.lv) << '\n'
+         << "cpp = " << std::bitset<32>(m_regs.cpp) << '\n'
+         << "tos = " << std::bitset<32>(m_regs.tos) << '\n'
+         << "opc = " << std::bitset<32>(m_regs.opc) << '\n'
+         << "h = " << std::bitset<32>(m_regs.h) << endl;
+}
+
+bool Emulator::load_registers(const std::string& path) {
+    std::ifstream input(path);
+    if (!input) {
+        cerr << "invalid register path: " << path << endl;
+        return false;
+    }
+    std::string line;
+    while (std::getline(input, line)) {
+        std::istringstream stream(line);
+        std::string name, equals, bits;
+        if (!(stream >> name))
+            continue;
+
+        if (!(stream >> equals >> bits) || equals != "=" ||
+            bits.size() != (name == "mbr" ? 8u : 32u) ||
+            bits.find_first_not_of("01") != std::string::npos) {
+            cerr << "invalid register line: " << line << endl; return false;
+        }
+
+        u32 value = (u32)(std::stoul(bits, nullptr, 2));
+        if (name == "mar") m_defaultregs.mar = value;
+        else if (name == "mdr") m_defaultregs.mdr = value;
+        else if (name == "pc") m_defaultregs.pc = value;
+        else if (name == "mbr") m_defaultregs.mbr = value;
+        else if (name == "sp") m_defaultregs.sp = value;
+        else if (name == "lv") m_defaultregs.lv = value;
+        else if (name == "cpp") m_defaultregs.cpp = value;
+        else if (name == "tos") m_defaultregs.tos = value;
+        else if (name == "opc") m_defaultregs.opc = value;
+        else if (name == "h") m_defaultregs.h = value;
+        else {
+            cerr << "unknown register: " << name << endl;
+            return false;
+        }
+    }
+
+    m_regs = m_defaultregs;
+    return true;
+}
+
+void Emulator::process_decoder(u8 mask) {
+    mask &= 0xF;
+
+    switch(mask) {
+    case 0: m_b = m_regs.mdr; break;
+    case 1: m_b = m_regs.pc; break;
+    case 2: m_b = (u32)((int32_t)((int8_t)m_regs.mbr)); break;
+    case 3: m_b = (u32)m_regs.mbr; break;
+    case 4: m_b = m_regs.sp; break;
+    case 5: m_b = m_regs.lv; break;
+    case 6: m_b = m_regs.cpp; break;
+    case 7: m_b = m_regs.tos; break;
+    case 8: m_b = m_regs.opc; break;
+    default:
+        break;
+    }
+}
+
+void Emulator::process_selector(u16 mask) {
+    for(int i = 0; i < 9; i++) {
+        u8 bit = (mask >> i) & 1;
+        if(bit == 0)
+            continue;
+        switch(i) {
+        case 0: m_regs.mar = m_sd; break;
+        case 1: m_regs.mdr = m_sd; break;
+        case 2: m_regs.pc = m_sd; break;
+        case 3: m_regs.sp = m_sd; break;
+        case 4: m_regs.lv = m_sd; break;
+        case 5: m_regs.cpp = m_sd; break;
+        case 6: m_regs.tos = m_sd; break;
+        case 7: m_regs.opc = m_sd; break;
+        case 8: m_regs.h = m_sd; break;
+        }
+    }
 }
 
 Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
@@ -79,19 +190,22 @@ Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
     return result;
 }
 
-pair<u32, u32> Emulator::execute_instruction() {
+void Emulator::execute_instruction() {
     ULAInput input = {
         .a = 0,
         .b = 0,
-        .ena = (u8)((m_ir >> 3) & 1), // read ENA bit
-        .enb = (u8)((m_ir >> 2) & 1), // read ENB bit
-        .inva = (u8)((m_ir >> 1) & 1), // read INVA bit
-        .f0 = (u8)((m_ir >> 5) & 1), // read F0 bit
-        .f1 = (u8)((m_ir >> 4) & 1), // read F1 bit
-        .in_carry = (u8)(m_ir & 1), // read INC bit
-        .sll8 = (u8)((m_ir >> 7) & 1), // read SLL8 bit
-        .sra1 = (u8)((m_ir >> 6) & 1)
+        .ena = (u8)((m_ir >> 16) & 1), // read ENA bit
+        .enb = (u8)((m_ir >> 15) & 1), // read ENB bit
+        .inva = (u8)((m_ir >> 14) & 1), // read INVA bit
+        .f0 = (u8)((m_ir >> 18) & 1), // read F0 bit
+        .f1 = (u8)((m_ir >> 17) & 1), // read F1 bit
+        .in_carry = (u8)((m_ir >> 13) & 1), // read INC bit
+        .sll8 = (u8)((m_ir >> 20) & 1), // read SLL8 bit
+        .sra1 = (u8)((m_ir >> 19) & 1) // read SRA1 bit
     };
+
+    m_a = m_regs.h;
+    process_decoder(m_ir & 0xF);
 
     m_s = 0;
 
@@ -114,22 +228,13 @@ pair<u32, u32> Emulator::execute_instruction() {
     m_z = (m_s == 0);
 
     // process sll8 and sra1
-    if(input.sll8 && input.sra1) {
-        cerr << "INVALID CONTROL SIGNALS" << endl;
-    }
-    else if(input.sll8) {
+    if(input.sll8) {
         m_sd = (m_s << 8);
     }
     else if(input.sra1) {
         m_sd = (m_s >> 1) | (m_s & (1 << 31));
     }
 
-    // returns A with ENA and INVA effects, and B with ENB effects
-    u32 a_out = input.ena ? m_a : 0u;
-    if (input.inva)
-        a_out = ~a_out;
-
-    u32 b_out = input.enb ? m_b : 0u;
-
-    return {a_out, b_out};
+    // apply results from C bus
+    process_selector((m_ir >> 4) & 0x1FF);
 }

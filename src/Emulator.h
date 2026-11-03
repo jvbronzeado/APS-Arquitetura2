@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <vector>
+#include <string>
+#include <iosfwd>
 
 #include "types.h"
 
@@ -10,14 +12,16 @@ using namespace std;
 
 class Emulator {
 public:
-    Emulator(const vector<u32>& instructions, u32 a, u32 b)
-        : m_instructions(instructions), m_a(a), m_b(b){
+    Emulator(const vector<u32>& instructions)
+        : m_instructions(instructions){
         
     }
 
     void init();
     bool cycle();
+    bool load_registers(const std::string& path); // load default registers
 private:
+    void print_registers() const;
     struct ULAInput {
         u8 a, b;
         u8 ena, enb;
@@ -35,7 +39,10 @@ private:
     
     ULAOutput process_ula(ULAInput input);
 
-    pair<u32, u32> execute_instruction();
+    void process_decoder(u8 mask); // handles B bus register selection
+    void process_selector(u16 mask); // handles write to selected registers
+
+    void execute_instruction();
     
     vector<u32> m_instructions;
     u32 m_a;
@@ -62,7 +69,10 @@ private:
         u32 mar;
 
         u8 mbr;
-    } m_regs;
+    };
+
+    Registers m_regs{};
+    Registers m_defaultregs{};
 };
 
 #endif
