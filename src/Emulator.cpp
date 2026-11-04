@@ -91,7 +91,7 @@ pair<u32, u32> Emulator::execute_instruction() {
         input.b = (m_b >> i) & 1;
 
         ULAOutput output = process_ula(input);
-        m_s |= (output.sum << i);
+        m_s |= (((u32)output.sum) << i);
 
         input.in_carry = output.out_carry;
         m_co = output.out_carry;
