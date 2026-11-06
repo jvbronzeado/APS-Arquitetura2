@@ -5,7 +5,7 @@
 #include <charconv>
 
 #include "types.h"
-#include "Emulator.h"
+#include "Microprocessor.h"
 
 using namespace std;
 
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
         cout.rdbuf(output.rdbuf());
 
         // begin emulation        
-        Emulator emu(instructions);
+        Mic1 emu(instructions);
         if(!emu.load_registers(argv[2])) {
             cout.rdbuf(console_buffer);
             return -1;

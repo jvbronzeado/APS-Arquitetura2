@@ -1,4 +1,4 @@
-#include "Emulator.h"
+#include "Microprocessor.h"
 #include <iostream>
 #include <bitset>
 #include <fstream>
@@ -8,9 +8,10 @@
 const char* b_names[] = {"mdr", "pc", "mbr", "mbru", "sp", "lv", "cpp", "tos", "opc"};
 const char* c_names[] = {"mar", "mdr", "pc", "sp", "lv", "cpp", "tos", "opc", "h"};
 
-void Emulator::init() {
+void Mic1::init() {
+    cout << "Executing instructions:\n";
     for (u32 instruction : m_instructions)
-        cout << std::bitset<21>(instruction) << endl;
+        cout << std::bitset<23>(instruction) << endl;
     cout << "\n=====================================================\n> Initial memory states" << endl;
     print_memory();
     cout << "\n=====================================================\n> Initial register states" << endl;
@@ -22,7 +23,12 @@ void Emulator::init() {
     m_ir = 0;
 }
 
-bool Emulator::cycle() {
+void Mic1::load_instructions(const vector<u32>& instructions) {
+    m_instructions = instructions;
+    m_cycle = 0;
+}
+
+bool Mic1::cycle() {
     m_cycle++;
     
     cout << "=====================================================" << endl;
@@ -63,7 +69,7 @@ bool Emulator::cycle() {
     else if(b_selector >= 9) {
         cout << "> Error, invalid B bus selector." << endl;
     }
-    else if(memory_mask == 3) {
+    else if(memory_mask == 3 && (m_ir & 0x7FFF) != 0b110000) {
         cout << "> Error, invalid memory signals." << endl;
     }
     else {
@@ -80,7 +86,7 @@ bool Emulator::cycle() {
     return true;
 }
 
-void Emulator::print_registers() const {
+void Mic1::print_registers() const {
     cout << "mar = " << std::bitset<32>(m_regs.mar) << '\n'
          << "mdr = " << std::bitset<32>(m_regs.mdr) << '\n'
          << "pc  = " << std::bitset<32>(m_regs.pc) << '\n'
@@ -93,14 +99,14 @@ void Emulator::print_registers() const {
          << "h   = " << std::bitset<32>(m_regs.h) << endl;
 }
 
-void Emulator::print_memory() const {
+void Mic1::print_memory() const {
     for(int i = 0; i < 16; i++) {
         cout << bitset<32>(m_memory[i]) << '\n';
     }
     cout << endl;
 }
 
-bool Emulator::load_registers(const std::string& path) {
+bool Mic1::load_registers(const std::string& path) {
     std::ifstream input(path);
     if (!input) {
         cerr << "invalid register path: " << path << endl;
@@ -141,7 +147,7 @@ bool Emulator::load_registers(const std::string& path) {
     return true;
 }
 
-bool Emulator::load_memory(const string& path) {
+bool Mic1::load_memory(const string& path) {
     ifstream file(path);
     if(!file.is_open()) {
         cerr << "invalid memory path: " << path << endl;
@@ -168,7 +174,7 @@ bool Emulator::load_memory(const string& path) {
     return true;
 }
 
-void Emulator::process_decoder(u8 mask) {
+void Mic1::process_decoder(u8 mask) {
     mask &= 0xF;
 
     switch(mask) {
@@ -186,7 +192,7 @@ void Emulator::process_decoder(u8 mask) {
     }
 }
 
-void Emulator::process_selector(u16 mask) {
+void Mic1::process_selector(u16 mask) {
     for(int i = 0; i < 9; i++) {
         u8 bit = (mask >> i) & 1;
         if(bit == 0)
@@ -205,7 +211,7 @@ void Emulator::process_selector(u16 mask) {
     }
 }
 
-Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
+Mic1::ULAOutput Mic1::process_ula(ULAInput input) {
     ULAOutput result;
     
     u8 ca = (input.a & input.ena) ^ input.inva;
@@ -235,8 +241,16 @@ Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
     return result;
 }
 
-void Emulator::execute_instruction() {
-    u32 ulac = (m_ir >> 15);
+void Mic1::execute_instruction() {
+    u8 ulac = (m_ir >> 15);
+    u8 mem = (m_ir >> 4) & 3;
+    if(mem == 3 && (m_ir & 0x7FFF) == 0b110000) {
+        // fetch instruction
+        m_regs.mbr = ulac;
+        m_regs.h = ulac;
+        return;
+    }
+    
     ULAInput input = {
         .a = 0,
         .b = 0,
@@ -285,7 +299,6 @@ void Emulator::execute_instruction() {
     process_selector((m_ir >> 6) & 0x1FF);
 
     // apply results to memory
-    u8 mem = (m_ir >> 4) & 3;
     bool read = (mem & 1) == 1;
     bool write = ((mem >> 1) & 1) == 1;
 

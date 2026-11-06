@@ -9,14 +9,14 @@
 
 using namespace std;
 
-class Emulator {
+class Mic1 {
 public:
-    Emulator(const vector<u32>& instructions)
-        : m_instructions(instructions){
-        
+    Mic1(const vector<u32>& instructions) {
+        load_instructions(instructions);
     }
 
     void init();
+    void load_instructions(const vector<u32>& instructions);
     bool cycle();
     bool load_registers(const std::string& path); // load default registers
     bool load_memory(const std::string& path); // load init memory
