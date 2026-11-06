@@ -10,8 +10,8 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-    if(argc < 3) { // program needs the input argument
-        cerr << "usage: ./aps1 <input> <default_registers>" << endl;
+    if(argc < 4) { // program needs the input argument
+        cerr << "usage: ./aps1 <input> <default_registers> <default_memory>" << endl;
         return -1;
     }
 
@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
             if (!line.empty() && line.back() == '\r')
                 line.pop_back();
 
-            if(line.size() != 21 || line.find_first_not_of("01") != string::npos) {
+            if(line.size() != 23 || line.find_first_not_of("01") != string::npos) {
                 cerr << "invalid line " << line << endl;
                 continue;
             }
@@ -45,6 +45,11 @@ int main(int argc, char* argv[]) {
         // begin emulation        
         Emulator emu(instructions);
         if(!emu.load_registers(argv[2])) {
+            cout.rdbuf(console_buffer);
+            return -1;
+        }
+
+        if(!emu.load_memory(argv[3])) {
             cout.rdbuf(console_buffer);
             return -1;
         }

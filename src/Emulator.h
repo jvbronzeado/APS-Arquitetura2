@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <vector>
 #include <string>
-#include <iosfwd>
 
 #include "types.h"
 
@@ -20,8 +19,11 @@ public:
     void init();
     bool cycle();
     bool load_registers(const std::string& path); // load default registers
+    bool load_memory(const std::string& path); // load init memory
 private:
     void print_registers() const;
+    void print_memory() const;
+
     struct ULAInput {
         u8 a, b;
         u8 ena, enb;
@@ -45,6 +47,8 @@ private:
     void execute_instruction();
     
     vector<u32> m_instructions;
+    u32 m_memory[16];
+    
     u32 m_a;
     u32 m_b;
     u32 m_s;

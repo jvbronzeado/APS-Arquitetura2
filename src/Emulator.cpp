@@ -11,6 +11,8 @@ const char* c_names[] = {"mar", "mdr", "pc", "sp", "lv", "cpp", "tos", "opc", "h
 void Emulator::init() {
     for (u32 instruction : m_instructions)
         cout << std::bitset<21>(instruction) << endl;
+    cout << "\n=====================================================\n> Initial memory states" << endl;
+    print_memory();
     cout << "\n=====================================================\n> Initial register states" << endl;
     print_registers();
     cout << "\n=====================================================" << endl;
@@ -34,14 +36,16 @@ bool Emulator::cycle() {
     m_ir = m_instructions[m_cycle-1];
 
     u32 b_selector = m_ir & 0xF;
-    u32 c_mask = (m_ir >> 4) & 0x1FF;
-    cout << "ir = " << std::bitset<8>(m_ir >> 13) << ' '
-         << std::bitset<9>(c_mask) << ' ' << std::bitset<4>(b_selector) << "\n\n";
+    u32 c_mask = (m_ir >> 6) & 0x1FF;
+    u32 memory_mask = (m_ir >> 4) & 0x3;
+    
+    cout << "ir = " << std::bitset<8>(m_ir >> 15) << ' '
+         << std::bitset<9>(c_mask) << ' ' << std::bitset<2>(memory_mask) << ' ' << std::bitset<4>(b_selector) << "\n\n";
     cout << "b_bus = " << (b_selector < 9 ? b_names[b_selector] : "invalid") << endl;
 
     cout << "c_bus = ";
     bool first = true;
-    for (int i = 8; i >= 0; --i) if (c_mask & (1u << i)) {
+    for (int i = 16; i >= 0; --i) if (c_mask & (1u << i)) {
         if (!first) cout << ", ";
         cout << c_names[i];
         first = false;
@@ -53,11 +57,14 @@ bool Emulator::cycle() {
     cout << "\n\n> Registers before instruction" << endl;
     print_registers();
 
-    if((m_ir & (3u << 19)) == (3u << 19)) {
+    if((m_ir & (3u << 21)) == (3u << 21)) {
         cout << "> Error, invalid control signals." << endl;
     }
     else if(b_selector >= 9) {
         cout << "> Error, invalid B bus selector." << endl;
+    }
+    else if(memory_mask == 3) {
+        cout << "> Error, invalid memory signals." << endl;
     }
     else {
         execute_instruction();
@@ -66,6 +73,9 @@ bool Emulator::cycle() {
     cout << "\n> Registers after instruction" << endl;
     print_registers();
 
+    cout << "\n> Memory after instruction" << endl;
+    print_memory();
+
     //m_regs = m_defaultregs;
     return true;
 }
@@ -73,14 +83,21 @@ bool Emulator::cycle() {
 void Emulator::print_registers() const {
     cout << "mar = " << std::bitset<32>(m_regs.mar) << '\n'
          << "mdr = " << std::bitset<32>(m_regs.mdr) << '\n'
-         << "pc = " << std::bitset<32>(m_regs.pc) << '\n'
+         << "pc  = " << std::bitset<32>(m_regs.pc) << '\n'
          << "mbr = " << std::bitset<8>(m_regs.mbr) << '\n'
-         << "sp = " << std::bitset<32>(m_regs.sp) << '\n'
-         << "lv = " << std::bitset<32>(m_regs.lv) << '\n'
+         << "sp  = " << std::bitset<32>(m_regs.sp) << '\n'
+         << "lv  = " << std::bitset<32>(m_regs.lv) << '\n'
          << "cpp = " << std::bitset<32>(m_regs.cpp) << '\n'
          << "tos = " << std::bitset<32>(m_regs.tos) << '\n'
          << "opc = " << std::bitset<32>(m_regs.opc) << '\n'
-         << "h = " << std::bitset<32>(m_regs.h) << endl;
+         << "h   = " << std::bitset<32>(m_regs.h) << endl;
+}
+
+void Emulator::print_memory() const {
+    for(int i = 0; i < 16; i++) {
+        cout << bitset<32>(m_memory[i]) << '\n';
+    }
+    cout << endl;
 }
 
 bool Emulator::load_registers(const std::string& path) {
@@ -99,7 +116,8 @@ bool Emulator::load_registers(const std::string& path) {
         if (!(stream >> equals >> bits) || equals != "=" ||
             bits.size() != (name == "mbr" ? 8u : 32u) ||
             bits.find_first_not_of("01") != std::string::npos) {
-            cerr << "invalid register line: " << line << endl; return false;
+            cerr << "invalid register line: " << line << endl;
+            return false;
         }
 
         u32 value = (u32)(std::stoul(bits, nullptr, 2));
@@ -120,6 +138,33 @@ bool Emulator::load_registers(const std::string& path) {
     }
 
     m_regs = m_defaultregs;
+    return true;
+}
+
+bool Emulator::load_memory(const string& path) {
+    ifstream file(path);
+    if(!file.is_open()) {
+        cerr << "invalid memory path: " << path << endl;
+        return false;
+    }
+
+    string line;
+    for(int i = 0; i < 16; i++) {
+        if(!getline(file, line)) {
+            cerr << "missing memory at line " << i << " (" << path << ")" << endl; 
+            return false;
+        }
+
+        if(line.find_first_not_of("01") != std::string::npos) {
+            cerr << "invalid memory line " << i << ": " << line << endl;
+            return false;
+        }
+
+        u32 value = (u32)(stoul(line, nullptr, 2));
+        m_memory[i] = value;
+    }
+
+    file.close();
     return true;
 }
 
@@ -191,17 +236,18 @@ Emulator::ULAOutput Emulator::process_ula(ULAInput input) {
 }
 
 void Emulator::execute_instruction() {
+    u32 ulac = (m_ir >> 15);
     ULAInput input = {
         .a = 0,
         .b = 0,
-        .ena = (u8)((m_ir >> 16) & 1), // read ENA bit
-        .enb = (u8)((m_ir >> 15) & 1), // read ENB bit
-        .inva = (u8)((m_ir >> 14) & 1), // read INVA bit
-        .f0 = (u8)((m_ir >> 18) & 1), // read F0 bit
-        .f1 = (u8)((m_ir >> 17) & 1), // read F1 bit
-        .in_carry = (u8)((m_ir >> 13) & 1), // read INC bit
-        .sll8 = (u8)((m_ir >> 20) & 1), // read SLL8 bit
-        .sra1 = (u8)((m_ir >> 19) & 1) // read SRA1 bit
+        .ena = (u8)((ulac >> 3) & 1), // read ENA bit
+        .enb = (u8)((ulac >> 2) & 1), // read ENB bit
+        .inva = (u8)((ulac >> 1) & 1), // read INVA bit
+        .f0 = (u8)((ulac >> 5) & 1), // read F0 bit
+        .f1 = (u8)((ulac >> 4) & 1), // read F1 bit
+        .in_carry = (u8)((ulac >> 0) & 1), // read INC bit
+        .sll8 = (u8)((ulac >> 7) & 1), // read SLL8 bit
+        .sra1 = (u8)((ulac >> 6) & 1) // read SRA1 bit
     };
 
     m_a = m_regs.h;
@@ -236,5 +282,18 @@ void Emulator::execute_instruction() {
     }
 
     // apply results from C bus
-    process_selector((m_ir >> 4) & 0x1FF);
+    process_selector((m_ir >> 6) & 0x1FF);
+
+    // apply results to memory
+    u8 mem = (m_ir >> 4) & 3;
+    bool read = (mem & 1) == 1;
+    bool write = ((mem >> 1) & 1) == 1;
+
+    if(write) {
+        m_memory[m_regs.mar] = m_regs.mdr;
+    }
+
+    if(read) {
+        m_regs.mdr = m_memory[m_regs.mar];
+    }
 }
