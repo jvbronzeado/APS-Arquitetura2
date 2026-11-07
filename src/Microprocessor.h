@@ -11,6 +11,8 @@ using namespace std;
 
 class Mic1 {
 public:
+    Mic1() {}
+    
     Mic1(const vector<u32>& instructions) {
         load_instructions(instructions);
     }

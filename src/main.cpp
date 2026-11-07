@@ -2,10 +2,8 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
-#include <charconv>
 
-#include "types.h"
-#include "Microprocessor.h"
+#include "Interpreter.h"
 
 using namespace std;
 
@@ -19,19 +17,11 @@ int main(int argc, char* argv[]) {
     ifstream f(path.data());
     if(f.is_open()) {
         // parse each line into an instructions array
-        vector<u32> instructions;
+        vector<string> instructions;
 
         string line;
         while(getline(f, line)) {
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-
-            if(line.size() != 23 || line.find_first_not_of("01") != string::npos) {
-                cerr << "invalid line " << line << endl;
-                continue;
-            }
-            int ins = stoi(line, nullptr, 2);
-            instructions.push_back(ins);
+            instructions.push_back(line);
         }
 
         f.close();
@@ -42,20 +32,20 @@ int main(int argc, char* argv[]) {
         streambuf* console_buffer = cout.rdbuf();
         cout.rdbuf(output.rdbuf());
 
-        // begin emulation        
-        Mic1 emu(instructions);
-        if(!emu.load_registers(argv[2])) {
+        // begin emulation
+        Interpreter interpreter;
+        if(!interpreter.load_registers(argv[2])) {
             cout.rdbuf(console_buffer);
             return -1;
         }
 
-        if(!emu.load_memory(argv[3])) {
+        if(!interpreter.load_memory(argv[3])) {
             cout.rdbuf(console_buffer);
             return -1;
         }
 
-        emu.init();
-        while(emu.cycle()) {}
+        interpreter.push_instructions(instructions);
+        interpreter.run();
 
         // return cout's output to console
         cout.rdbuf(console_buffer);
