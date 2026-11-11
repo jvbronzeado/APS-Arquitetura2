@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <vector>
 #include <string>
+#include <array>
 
 #include "types.h"
 
@@ -11,6 +12,10 @@ using namespace std;
 
 class Mic1 {
 public:
+    struct State {
+        std::array<u32, 10> registers;
+        std::array<u32, 16> memory;
+    };
     Mic1() {}
     
     Mic1(const vector<u32>& instructions) {
@@ -20,11 +25,10 @@ public:
     void init();
     void load_instructions(const vector<u32>& instructions);
     bool cycle();
+    State state() const;
     bool load_registers(const std::string& path); // load default registers
     bool load_memory(const std::string& path); // load init memory
 private:
-    void print_registers() const;
-    void print_memory() const;
 
     struct ULAInput {
         u8 a, b;

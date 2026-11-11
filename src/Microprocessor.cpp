@@ -1,24 +1,10 @@
 #include "Microprocessor.h"
 #include <iostream>
-#include <bitset>
 #include <fstream>
 #include <sstream>
 #include "types.h"
 
-const char* b_names[] = {"mdr", "pc", "mbr", "mbru", "sp", "lv", "cpp", "tos", "opc"};
-const char* c_names[] = {"mar", "mdr", "pc", "sp", "lv", "cpp", "tos", "opc", "h"};
-
 void Mic1::init() {
-    cout << "Executing instructions:\n";
-    for (u32 instruction : m_instructions)
-        cout << std::bitset<23>(instruction) << endl;
-    cout << "\n=====================================================\n> Initial memory states" << endl;
-    print_memory();
-    cout << "\n=====================================================\n> Initial register states" << endl;
-    print_registers();
-    cout << "\n=====================================================" << endl;
-    cout << "Start of program" << endl;
-
     m_cycle = 0;
     m_ir = 0;
 }
@@ -29,81 +15,38 @@ void Mic1::load_instructions(const vector<u32>& instructions) {
 }
 
 bool Mic1::cycle() {
-    m_cycle++;
-    
-    cout << "=====================================================" << endl;
-    cout << "Cycle " << m_cycle << endl;
-
-    if(m_cycle > m_instructions.size()) {
-        cout << "No more lines, EOP." << endl;
+    if(m_cycle >= m_instructions.size()) {
         return false;
     }
 
-    m_ir = m_instructions[m_cycle-1];
+    m_ir = m_instructions[m_cycle++];
 
     u32 b_selector = m_ir & 0xF;
-    u32 c_mask = (m_ir >> 6) & 0x1FF;
     u32 memory_mask = (m_ir >> 4) & 0x3;
-    
-    cout << "ir = " << std::bitset<8>(m_ir >> 15) << ' '
-         << std::bitset<9>(c_mask) << ' ' << std::bitset<2>(memory_mask) << ' ' << std::bitset<4>(b_selector) << "\n\n";
-    cout << "b_bus = " << (b_selector < 9 ? b_names[b_selector] : "invalid") << endl;
-
-    cout << "c_bus = ";
-    bool first = true;
-    for (int i = 16; i >= 0; --i) if (c_mask & (1u << i)) {
-        if (!first) cout << ", ";
-        cout << c_names[i];
-        first = false;
-    }
-    if (first) {
-        cout << "none";
-    }
-
-    cout << "\n\n> Registers before instruction" << endl;
-    print_registers();
 
     if((m_ir & (3u << 21)) == (3u << 21)) {
-        cout << "> Error, invalid control signals." << endl;
+        cerr << "Error, invalid control signals.\n";
     }
     else if(b_selector >= 9) {
-        cout << "> Error, invalid B bus selector." << endl;
+        cerr << "Error, invalid B bus selector.\n";
     }
     else if(memory_mask == 3 && (m_ir & 0x7FFF) != 0b110000) {
-        cout << "> Error, invalid memory signals." << endl;
+        cerr << "Error, invalid memory signals.\n";
     }
     else {
         execute_instruction();
     }
 
-    cout << "\n> Registers after instruction" << endl;
-    print_registers();
-
-    cout << "\n> Memory after instruction" << endl;
-    print_memory();
-
-    //m_regs = m_defaultregs;
     return true;
 }
 
-void Mic1::print_registers() const {
-    cout << "mar = " << std::bitset<32>(m_regs.mar) << '\n'
-         << "mdr = " << std::bitset<32>(m_regs.mdr) << '\n'
-         << "pc  = " << std::bitset<32>(m_regs.pc) << '\n'
-         << "mbr = " << std::bitset<8>(m_regs.mbr) << '\n'
-         << "sp  = " << std::bitset<32>(m_regs.sp) << '\n'
-         << "lv  = " << std::bitset<32>(m_regs.lv) << '\n'
-         << "cpp = " << std::bitset<32>(m_regs.cpp) << '\n'
-         << "tos = " << std::bitset<32>(m_regs.tos) << '\n'
-         << "opc = " << std::bitset<32>(m_regs.opc) << '\n'
-         << "h   = " << std::bitset<32>(m_regs.h) << endl;
-}
-
-void Mic1::print_memory() const {
-    for(int i = 0; i < 16; i++) {
-        cout << bitset<32>(m_memory[i]) << '\n';
-    }
-    cout << endl;
+Mic1::State Mic1::state() const {
+    State snapshot{{m_regs.mar, m_regs.mdr, m_regs.pc, m_regs.mbr,
+                    m_regs.sp, m_regs.lv, m_regs.cpp, m_regs.tos,
+                    m_regs.opc, m_regs.h}, {}};
+    for (size_t i = 0; i < snapshot.memory.size(); ++i)
+        snapshot.memory[i] = m_memory[i];
+    return snapshot;
 }
 
 bool Mic1::load_registers(const std::string& path) {

@@ -3,10 +3,54 @@
 #include <iostream>
 #include <algorithm>
 #include <bitset>
+#include <iomanip>
 
 #include "instructions/ILOAD.h"
 #include "instructions/DUP.h"
 #include "instructions/BIPUSH.h"
+
+namespace {
+const string table_border = "+--------+----------------------------------+----------------------------------+";
+
+void print_table_header(const string& first_column) {
+    cout << table_border << '\n'
+         << "| " << left << setw(6) << first_column
+         << " | Before                           | After                            |\n"
+         << table_border << '\n';
+}
+
+void print_table_row(const string& label, const string& before, const string& after) {
+    cout << "| " << left << setw(6) << label
+         << " | " << left << setw(32) << before
+         << " | " << left << setw(32) << after << " |\n";
+}
+
+string register_bits(u32 value, bool is_byte) {
+    return is_byte ? bitset<8>(value).to_string() : bitset<32>(value).to_string();
+}
+
+void print_state_change(const Mic1::State& before, const Mic1::State& after) {
+    const char* register_names[] = {"MAR", "MDR", "PC", "MBR", "SP", "LV", "CPP", "TOS", "OPC", "H"};
+    constexpr size_t mbr_index = 3;
+
+    print_table_header("State");
+    for (size_t i = 0; i < before.registers.size(); ++i) {
+        bool is_byte = i == mbr_index;
+        print_table_row(register_names[i],
+                        register_bits(before.registers[i], is_byte),
+                        register_bits(after.registers[i], is_byte));
+    }
+    cout << table_border << "\nMemory\n";
+
+    print_table_header("Address");
+    for (size_t i = 0; i < before.memory.size(); ++i) {
+        print_table_row(to_string(i),
+                        bitset<32>(before.memory[i]).to_string(),
+                        bitset<32>(after.memory[i]).to_string());
+    }
+    cout << table_border << "\n\n";
+}
+}
 
 Interpreter::Interpreter() {
     m_processor = new Mic1();
@@ -125,18 +169,13 @@ optional<unique_ptr<IJVMInstruction>> Interpreter::handle_tokens(const vector<st
 }
 
 void Interpreter::execute_microinstructions(IJVMInstruction& instruction)  {
-    cout << "Executing " << instruction.get_name() << " instruction" << endl;
+    const Mic1::State before = m_processor->state();
 
-    vector<u32> microinstructions = instruction.translate();
+    m_processor->load_instructions(instruction.translate());
+    while (m_processor->cycle()) {}
 
-    for(u32 x : microinstructions) {
-        cout << bitset<23>(x) << '\n';
-    }
+    const Mic1::State after = m_processor->state();
 
-    cout << endl;
-    
-    m_processor->load_instructions(microinstructions);
-    while(m_processor->cycle()){}
-
-    cout << endl;
+    cout << "Instruction: " << instruction.get_name() << '\n';
+    print_state_change(before, after);
 }
