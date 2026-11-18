@@ -68,19 +68,19 @@ private:
     u32 m_ir = 0;
 
     struct Registers {
-        u32 h;
-        u32 opc;
-        u32 tos;
-        u32 cpp;
-        u32 lv;
-        u32 sp;
-        u32 pc;
-        u32 mdr;
-        u32 mar;
+        u32 h; // auxiliar registror utilized on ULA input
+        u32 opc; // temporaly stores a value from PC
+        u32 tos; // stores a copy of the value at the top of the stack
+        u32 cpp; // points to constants
+        u32 lv; // points to the base of local variables
+        u32 sp; // points to the top of the stack
+        u32 pc; // points to the next instruction of the program
+        u32 mdr; // stores the read data in memory or the data that will be written in it
+        u32 mar; // stores the memory address that will be read or written
 
-        u8 mbr;
+        u8 mbr; // stores a byte. in this implementation, fetch puts in it the BIPUSH argument
     };
-
+    
     Registers m_regs{};
     Registers m_defaultregs{};
 };

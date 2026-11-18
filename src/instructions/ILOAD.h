@@ -9,12 +9,16 @@
 
 using namespace std;
 
+/*
+ILOAD x: reads the local variable at address LV + x and puts its value at the
+top of the stack
+*/
 class ILOAD : public IJVMInstruction {
 public:
     ILOAD(u32 address) : m_address(address) {};
 
     string get_name() override {
-        return "ILOAD";
+        return "ILOAD " + std::to_string(m_address);
     }
         
     vector<u32> translate() override {
@@ -31,6 +35,16 @@ public:
 
         return out;
     };
+
+    vector<string> translation_log() override {
+        vector<string> out = {"H = LV"};
+        for (u32 i = 0; i < m_address; ++i)
+            out.push_back("H = H + 1");
+        out.push_back("MAR = H; rd");
+        out.push_back("MAR = SP = SP+1; wr");
+        out.push_back("TOS = MDR");
+        return out;
+    }
 private:
     u32 m_address;
 };

@@ -14,6 +14,7 @@ public:
     
     virtual string get_name() {return "UNKNOWN";};
     virtual vector<u32> translate() {return {};};
+    virtual vector<string> translation_log() = 0;
 private:
 };
 

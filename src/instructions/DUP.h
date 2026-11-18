@@ -8,6 +8,10 @@
 
 using namespace std;
 
+/*
+DUP: duplicates the value at the top of the stack.
+Increments SP and stores a copy of TOS in the new position
+*/
 class DUP : public IJVMInstruction {
 public:
     DUP() {};
@@ -22,6 +26,10 @@ public:
             0b00110100000000010100111 // MDR = TOS; wr
         };
     };
+
+    vector<string> translation_log() override {
+        return {"MAR = SP = SP+1", "MDR = TOS; wr"};
+    }
 private:
 };
 

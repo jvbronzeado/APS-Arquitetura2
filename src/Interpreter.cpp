@@ -29,6 +29,45 @@ string register_bits(u32 value, bool is_byte) {
     return is_byte ? bitset<8>(value).to_string() : bitset<32>(value).to_string();
 }
 
+void print_bus_selection(u32 microinstruction) {
+    // The special fetch writes MBR and H directly, without using either bus.
+    if (((microinstruction >> 4) & 3u) == 3u &&
+        (microinstruction & 0x7fffu) == 0b110000u) {
+        cout << "B bus: none (fetch)\nC bus: none (fetch writes MBR and H directly)\n";
+        return;
+    }
+
+    const char* b_registers[] = {"MDR", "PC", "MBR", "MBRU", "SP", "LV", "CPP", "TOS", "OPC"};
+    const char* c_registers[] = {"MAR", "MDR", "PC", "SP", "LV", "CPP", "TOS", "OPC", "H"};
+    u32 b = microinstruction & 0xfu;
+    cout << "B bus: " << (b < 9 ? b_registers[b] : "invalid") << "\nC bus: ";
+
+    u32 c = (microinstruction >> 6) & 0x1ffu;
+    bool first = true;
+    for (size_t i = 0; i < 9; ++i) {
+        if ((c & (1u << i)) == 0)
+            continue;
+        if (!first)
+            cout << ", ";
+        cout << c_registers[i];
+        first = false;
+    }
+    if (first)
+        cout << "none";
+    cout << '\n';
+}
+
+void print_initial_state(const Mic1::State& state) {
+    const char* register_names[] = {"MAR", "MDR", "PC", "MBR", "SP", "LV", "CPP", "TOS", "OPC", "H"};
+    cout << "Initial register state\n";
+    for (size_t i = 0; i < state.registers.size(); ++i)
+        cout << register_names[i] << " = " << register_bits(state.registers[i], i == 3) << '\n';
+
+    cout << "\nInitial memory state\n";
+    for (size_t i = 0; i < state.memory.size(); ++i)
+        cout << i << " = " << bitset<32>(state.memory[i]) << '\n';
+}
+
 void print_state_change(const Mic1::State& before, const Mic1::State& after) {
     const char* register_names[] = {"MAR", "MDR", "PC", "MBR", "SP", "LV", "CPP", "TOS", "OPC", "H"};
     constexpr size_t mbr_index = 3;
@@ -76,7 +115,17 @@ void Interpreter::push_instructions(const vector<string>& instructions) {
 
 void Interpreter::run() {
     m_processor->init();
-    
+
+    cout << "Instructions\n";
+    queue<string> listed = m_pending;
+    while (!listed.empty()) {
+        if (listed.front().find_first_not_of(" \t\r\n") != string::npos)
+            cout << listed.front() << '\n';
+        listed.pop();
+    }
+    cout << '\n';
+    print_initial_state(m_processor->state());
+
     while(!m_pending.empty()) {
         string line = m_pending.front();
         m_pending.pop();
@@ -169,13 +218,24 @@ optional<unique_ptr<IJVMInstruction>> Interpreter::handle_tokens(const vector<st
 }
 
 void Interpreter::execute_microinstructions(IJVMInstruction& instruction)  {
-    const Mic1::State before = m_processor->state();
+    const vector<u32> microinstructions = instruction.translate();
+    const vector<string> translation = instruction.translation_log();
 
-    m_processor->load_instructions(instruction.translate());
-    while (m_processor->cycle()) {}
+    m_processor->load_instructions(microinstructions);
+    cout << "\n========================================\n"
+         << "Instruction: " << instruction.get_name() << "\nTranslation:\n";
+    for (size_t i = 0; i < translation.size(); ++i)
+        cout << "Microinstruction " << (i + 1) << ": " << translation[i] << '\n';
 
-    const Mic1::State after = m_processor->state();
+    cout << '\n';
+    for (size_t i = 0; i < microinstructions.size(); ++i) {
+        const Mic1::State before = m_processor->state();
+        m_processor->cycle();
+        const Mic1::State after = m_processor->state();
 
-    cout << "Instruction: " << instruction.get_name() << '\n';
-    print_state_change(before, after);
+        cout << "Microinstruction " << (i + 1) << ": "
+             << bitset<23>(microinstructions[i]) << '\n';
+        print_bus_selection(microinstructions[i]);
+        print_state_change(before, after);
+    }
 }
